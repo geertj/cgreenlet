@@ -1,0 +1,90 @@
+Hacking on CGreenlet
+====================
+
+CGreenlet tries to be a FAST!, easy to use and yet simple to understand and
+maintain library for using coroutines.
+
+CGreenlet requires 4 platform and/or architecture specific pieces of
+functionality in order to be able to offer coroutines:
+
+ 1. Thread-local storage.
+ 2. Stack allocation and deallocation
+ 3. Stack switching
+ 4. Context switching
+
+CGreenlet's approach to portability is that a platform is only supported if it
+has been explicitly ported and tested. This means that it does not use
+autoconf to test for features, but uses the C preprocessor and Makefile
+conditional to see if a platform is support and adjust the build process
+accordingly This approach was taken because often the low-level fuctions we
+need may work slightly different on different platforms, or are buggy. Also
+this frees us from having to implement the autoconf complexity.
+
+For each platform that is supported, these 4 areas of functionality have to be
+provided. What follows now is an overview on how each of these are
+implemented:
+
+Thread-local storage
+--------------------
+
+Currently two approaches are supported. The fastest and preferred way is to
+use a __thread allocation class keyword on thread-local variables. This is
+available on Linux and on Windows. This if is not available (e.g. on Mac OSX),
+the pthread_getspecific() API is used.
+
+Thread-local storage is implemented in "greenlet-system.c".
+
+Allocation of the stack
+-----------------------
+
+On Unix-like systems, cgreenlet uses mmap() and on Windows, it uses
+VirtualAlloc(). The stack is protected with one PROT_NONE guard page. Stack
+allocation is implemented in "greenlet-system.c".
+
+Stack switching
+---------------
+
+There is really no portably way to do this. On Unix-like platforms, we could
+use sigaltstack() + longjmp(), or the deprecated POSIX makecontext(). On
+Windows, the Fiber API could be used.
+
+The approach that cgreenlet has taken is to implement an architecture specific
+function to switch stacks:
+
+  void _greenlet_callnewstack(void *stack, void *(*func)(void *), void *arg);
+
+This function will switch stack to `stack', and call `func(arg)' on the new
+stack. The function may not return. If it does try to return, a SIGSEGV will
+be raised because we overwrite the return address to NULL. The way to get out
+of this function is to switch context to a parent of the current context (see
+next section).
+
+This function is implemented in assembly in "greenlet-asm.S".
+
+Context switching
+-----------------
+
+A relatively portably way to implement this would be setjmp()/longjmp(). The
+function is available on Unix-like platforms and Windows. However the
+performance of these functions varies greatly, as on some platforms this saves
+the signal stack and on others it doesn't. Also, setjmp()/longjmp() do not
+allow you to inject code just before execution is resumed in the target. Code
+injection is needed to propagate exceptions in C++.
+
+The approach taken by cgreenlet is to provide a fast architecture specific
+implementation of setjmp()/longjmp():
+
+  int _greenlet_setjmp_fast(void *frame);
+  void _greenlet_longjmp_fast(void *frame, void (*inject_func)(void *),
+                              void *arg);
+
+These functions work just like setjmp()/longjmp() only that they are about 2x
+faster and allow for code injection. 
+
+These functios are implemented in assemlby in "greenlet-asm.S".
+
+Contributing
+============
+
+Feel free to add an issue on the github site, or fork it and send me a merge
+request. Specifically patches for the ARM platform would be appreciated.

@@ -1,0 +1,8 @@
+doc/_build
+*.o
+*.a
+examples/simple
+examples/simple-cc
+test/exception
+test/perf-setjmp
+test/perf-switch

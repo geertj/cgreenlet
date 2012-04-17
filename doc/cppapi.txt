@@ -1,0 +1,63 @@
+C++ API Reference
+=================
+
+.. highlight: cpp
+
+The greenlet class
+------------------
+
+The greenlet class is a wrapper around the ``greenlet_t`` structure from the
+cgreenlet C API. Before reading this section, make sure you have read the C
+API first.
+
+Two constructors and a destructor are provided for the ``greenlet`` class::
+
+  class greenlet
+  {
+  public:
+      greenlet(greenlet_start_func_t start_func=0L,
+                     greenlet *parent=0L, long stacksize=OL);
+      greenlet(greenet_t *greenlet);
+      ~greenlet();
+  };
+
+The first constructor creates a new ``greenlet`` instance from scratch. All
+arguments are optional and have the same measing as in the C API. The second
+form creates a ``greenlet`` instance from a ``greenlet_t`` struct from the C
+API. This allows C and C++ greenlets to exist in the same program. The
+destructor peforms the same thing as ``greenlet_destory()`` in the C API.
+
+Main function
+-------------
+
+The greenlet's main function is always its virtual ``run()`` method::
+
+  protected:
+      virtual void *run(void *arg);
+
+The default implementation of ``run()`` executes the *start_func* argument
+that was passed to the constructor. You can override ``run()`` to embed your
+main function in a derived class.
+
+Greenlet methods
+----------------
+
+Many functions that exist in the C API exist as method on the ``greenlet``
+class in the C++ API::
+
+  public:
+      void *switch_to(void *arg);
+      void inject(greenlet_inject_func_t inject_func);
+      void reset();
+
+      bool isstarted();
+      bool isdead();
+
+Exceptions
+----------
+
+Exceptions that are not caught in a greenlet will exit the greenlet's main
+function and move it to the "DEAD" state. When this happens, the exception is
+then re-raised in the greenlet's parent, and the parent's parent, and so on,
+until either it is caught or until the root greenlet is reached. If the root
+greenlet does not catch the exception, the C++ program will terminate.

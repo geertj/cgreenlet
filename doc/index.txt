@@ -1,0 +1,19 @@
+.. CGreenlet Manual documentation master file, created by
+   sphinx-quickstart on Mon Apr 16 20:09:51 2012.
+   You can adapt this file completely to your liking, but it should at least
+   contain the root `toctree` directive.
+
+CGreenlet Manual
+================
+
+This is the reference manual for cgreenlet. CGreenlet provides an API to work
+with coroutines in C and C++.
+
+Contents:
+
+.. toctree::
+   :maxdepth: 1
+
+   intro
+   capi
+   cppapi

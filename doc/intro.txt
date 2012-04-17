@@ -1,0 +1,65 @@
+Introduction
+============
+
+CGreenlet provides an API for working with coroutines in C and C++. The API
+is modeled after the Python *greenlet* API [1]_.
+
+For some, including me before i made an effort to understand them, coroutines
+are a mysterious type of function. In The Art of Computer Programming, Donald
+Knuth introduces coroutines as generalizations of subroutines. Instead of
+returning to the caller, they can also return to a different coroutine.
+
+That explanation didn't do it for me. However I think coroutines can be
+relatively easy explained in terms of function call stacks. When you call a
+function, the called function will return to you. If the function you call,
+calls a nested function, that nested function will first return to the
+function that called it, which then may return to you as the original caller.
+The call history is a stack. Inner functions always pop one level (or "frame")
+off the stack when they return to their calling function. And calling a nested
+function will push one level (or "frame") onto the stack. The stack idea is
+actually not just a visualization, it is how virtually all function call ABIs
+are implemented.
+
+With the idea of a function call stack in mind, coroutines can be explained as
+having multiple call stacks next to each other. Each coroutine corresponds to
+one function call stack. Normal function can only move up and down their call
+stack. Co-routines however, in addition to moving up and down like regular
+functions, can also move sideways to other stacks. Moving sideways is called
+"yielding" or "switching", as opposed to "calling" and "returning" wich moves
+up and down. Crucially, when moving sideways to another coroutine, the point
+of switching is remembered. And if one of the other coroutines switches back
+to the original coroutine, it continues exactly where it was left.
+
+In my view, that is all there is to coroutines. So why are coroutines
+useful? It turns out that there are a couple of use cases that are ideally
+suited to being solved with coroutines. Two very important ones are:
+
+1. Producer / consumer patterns
+
+   This happens for example in a scanner / parser. The scanner produces tokens
+   from an input. The parser consumes tokens from the scanner. And both
+   functions need context to remember where they are.
+
+   Without coroutines, it is normal to implement one of the functions as a
+   callback that saves state in some area that is preserved between function
+   calls. However callback programming signifcanlty complicates things because
+   the program execution is no longer sequential. With coroutines, both the
+   producer and the consumer can be implemented as sequential functions, that
+   switch to each other when a token is available (the scanner switches to the
+   parser) or when a token is needed (the parser switches to the scanner).
+
+2. Multiplexed I/O
+
+   Multiplexing I/O means handling multiple streams of input and output in a
+   single process. Traditionally, this can be done by using non-blocking I/O
+   and select(). This has the drawback that you need to write your application
+   as callbacks again, which greatly complicates things. Another solution is
+   to use threads. Threads can use blocking I/O and can therefore implement
+   sequential program logic. However threads are complicated to get right when
+   they need to access global state. Also threads need to be managed as they
+   can eat up system resources quickly.
+
+   Co-routines are ideal for doing multiplexed I/O. They allow you to write
+   sequential code, without having to deal with the complexities of threads.
+
+.. [1] http://pypi.python.org/pypi/greenlet

@@ -1,0 +1,160 @@
+C API Reference
+===============
+
+.. highlight:: c
+
+Greenlet type
+-------------
+
+The central data structure in the C API is the ``greenlet_t``::
+
+  typedef void *(*greenet_start_func_t)(void *);
+
+  typedef struct
+  {
+      greenlet_t *gr_parent;
+      void *gr_stack;
+      long gr_stacksize;
+      int gr_flags;
+      greenlet_start_func_t gr_start;
+      /* private members follow */
+  } greenlet_t;
+
+Most functions in the cgreenlet library take a greenlet_t as their first
+argument.
+
+Creating greenlets
+------------------
+
+New greenlets are created using the ``greenlet_new()`` function::
+
+  greenlet_t *greenlet_new(greenlet_start_func_t start_func,
+                           greenlet_t *parent, long stacksize);
+
+The *start_func* argument specifies the greenlet's main function. The *parent*
+argument specifies the greenlet's parent. If *parent* is NULL this creates a
+greenlet that is a child of the special root greenlet. The *stacksize*
+argument specifies the size of the stack to allocate. If *stacksize* is 0,
+this allocates a stack of a platform specific default size.
+
+Switching between greenlets
+---------------------------
+
+A greenlet is started with the "greenlet_switch_to()" function::
+
+  void *greenlet_switch_to(greenlet_t *greenlet, void *arg);
+
+The first time this function is called on a greenlet, a new execution context
+is created on the stack that was allocated by ``greenlet_new()``, and that
+greenlet's *start_func* method is called with *arg* as its argument. The
+greenlet will now be in the "STARTED" state.
+
+After the greenlet has been started, it can either return from its main
+routine, or switch to another greenlet. If the greenlet returns, the greenlet
+is marked as "DEAD", and execution switches to its parent. If the greenlet
+switches to another greenlet, its execution is paused at the point where the
+greenlet calls ``greenlet_switch_to()``. Should another greenlet switch back
+into this greenlet, then ``greenlet_switch_to()`` returns and resumes
+execution from that point.
+
+Every greenlet (except the root greenlet) has a parent. If a greenlet was
+created with the *parent* parameter of ``greenlet_new()`` set to NULL, the
+greenlet is a child of the root greenlet.
+
+When greenlets start up or switch between each other, ``void *`` pointers can
+be passed that allow you to pass arbitrary data.
+
+Root and current greenlets
+--------------------------
+
+Each process has a special greenlet called the root greenlet. The root
+greenlet corresponds to the execution context that has been set up by the
+Operating System when the process was started. The root greenlet is retrieved
+using::
+
+  greenlet_t *greenlet_root(void);
+
+Each process also has exactly one current greenlet. The current greenlet is
+retrieved using::
+
+  greenlet_t *greenlet_current(void);
+
+A greenlet's parent is retrieved using::
+
+  greenlet_t *greenlet_parent(greenlet_t *greenlet);
+
+The only greenlet without a parent is the root greenlet. Calling
+``greenlet_parent()`` for the root greenlet returns NULL.
+
+Greenlet states
+---------------
+
+The state of greenlet is stored in the ``gr_flags`` member in the
+``greenlet_t`` structure. It is the bitwise OR of the following values::
+
+  enum greenlet_flags
+  {
+      GREENLET_STARTED = 0x1,
+      GREENLET_DEAD = 0x2
+  };
+
+Every greenlet except the root greenlet starts in an empty state. Once the
+greenlet has been switched to for the first time, it status will have the
+GREENLET_STARTED bit set. Once a greenlet's main function has exited, it
+status will have the GREENLET_DEAD bit set. The root greenlet is always in the
+GREENLET_STARTED status.
+
+The following two utility functions are provided to retrieve a greenlet's
+state::
+
+  int greenlet_isstarted(greenlet_t *greenlet);
+  int greenlet_isdead(greenlet_t *greenlet);
+
+Terminating greenlets
+---------------------
+
+Greenlets can be terminated in two ways. First, a greenlet can be reset. This
+destroys its execution context but keeps the stack allocated. Switching to the
+greenlet after it is reset would invoke the greenlet's *start_func* again from
+the beginning::
+
+  void greenlet_reset(greenlet_t *greenlet);
+
+The second way to terminate a greenlet is to destroy it::
+
+  void greenlet_destroy(greenlet_t *greenlet);
+
+Destroying a greenlet destroys its execution context and also deallocates its
+stack. The greenlet cannot be used anymore.
+
+Thread and Greenlets
+--------------------
+
+Each thread in a process has its own root greenlet and child greenlets. The
+cgreenlet library is thread-safe in this respect. Of course you need to make
+sure that when you are using multiple threads, that the greenlets in different
+threads are properly synchronized if they access shared data. Within a single
+thread, synchronization is never required because there is always one and only
+one active greenlet. This is actually the key difference between threads and
+greenlets.
+
+Injecting code
+--------------
+
+You can inject a function into a greenlet by using ``greenlet_inject()``::
+
+  typedef void (*greenlet_inject_func_t)(void *);
+
+  void greenlet_inject(greenlet_t *greenlet,
+                       greenlet_inject_func_t inject_func);
+
+When a function has been injected this way , the injected function will be
+called exactly once when switching to the greenlet, just before the point
+where execution would normally start or resume. The argument that is passed to
+*inject_func* is the one that will have been passed to the greenlet as well.
+If the injected function returns, the greenlet execution will resume as
+normal.
+
+Injecting code can be useful in some special error situations or for
+debugging. It is also used by the C++ greenlet interface to inject exceptions
+from a child into a parent greenlet.
