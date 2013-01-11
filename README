@@ -1,3 +1,19 @@
+Note
+====
+
+CGreenlet doesn't use the "stack splicing" approach that other green threads
+implementations use. This means that a whole stack will be allocated per
+greenlet. This is a lot less memory effcient than using stack splicing.
+
+You should consider this code mostly as a proof of concept. For a proven
+real-world implementation of green threads with stack splicing see the
+"stacklet" implementatin from PyPy:
+
+  https://bitbucket.org/pypy/pypy/src/default/pypy/translator/c/src/stacklet/
+
+The Stacklet API is a little bit more low-level. Stacklet would be an ideal
+backend for CGreenlet.
+
 Overview
 ========
 
